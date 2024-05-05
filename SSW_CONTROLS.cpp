@@ -3,8 +3,8 @@
 // Senior Design Project - ME195B 
 
 #include "Nextion.h"
-#define dirPin 8                                                              // Pin que nos indicara el sentido de giro.
-#define pulsoPin 9                                                            // Pin para cada uno de los pulsos que hace girar el motor.
+#define dirPin 2                                                              // Pin que nos indicara el sentido de giro.
+#define pulsoPin 3                                                           // Pin para cada uno de los pulsos que hace girar el motor.
 
 NexText t0 = NexText(0, 1, "t0");                                             // Definimos etiqueta Texto.
 NexSlider h0 = NexSlider(0, 2, "h0");                                         // Definimos un nuebo Objeto slider.
