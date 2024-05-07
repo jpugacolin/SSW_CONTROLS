@@ -2,90 +2,83 @@
 // Code Written by Jose Puga
 // Senior Design Project - ME195B 
 
-#include "Nextion.h"
-#define dirPin 2                                                              // Pin que nos indicara el sentido de giro.
-#define pulsoPin 3                                                           // Pin para cada uno de los pulsos que hace girar el motor.
+#include <Arduino.h>
+#include <SPI.h>
+#include <SoftwareSerial.h>
+#include <Nextion.h>
+#include <AccelStepper.h>
 
-NexText t0 = NexText(0, 1, "t0");                                             // Definimos etiqueta Texto.
-NexSlider h0 = NexSlider(0, 2, "h0");                                         // Definimos un nuebo Objeto slider.
-NexDSButton bt0 = NexDSButton(0, 3, "bt0");                                   // Boton marcha.
-NexDSButton bt1 = NexDSButton(0, 4, "bt1");                                   // Boton cambio giro.
+#define STEP_PIN 2  // Define the STEP pin
+#define DIR_PIN 3   // Define the DIR pin
 
-char buffer[100] = {0};
-int delayPasos = 9000;                                                        // Variable para temporizar los pasos.
-int valorSlider = 0;                                                          // Variable para almacenar el valor del slider que se lee.
-int disparo=500;
-uint32_t botonMotorON;
-uint32_t botonSentidoGiro;
-boolean  puestaMarchaMotor = false;
-boolean  sentidoGiro = false;
+bool moving = false;  // Track if the motor is moving
+bool direction = true;  // true for clockwise, false for counterclockwise
+unsigned long lastStepTime = 0;  // Time tracking for steps
+int stepDelay = 1000;  // Initial step delay in microseconds, adjust as needed
 
 
-NexTouch *nex_listen_list[] =                                                       // Lista de escucha, solo el slider.
-{
+// Declare the Nextion components
+NexButton b0 = NexButton(1, 1, "b0"); // Page 0, ID 1, Button for forward
+NexButton bt0 = NexButton(1, 2, "bt0"); // Page 0, ID 2, Button for backward
+NexSlider h0 = NexSlider(1, 3, "h0"); // Page 0, ID 3, Slider for speed
+
+
+// List of all the touch event listeners
+NexTouch *nex_listen_list[] = {
+    &b0,
     &bt0,
-    &bt1,
     &h0,
-    NULL
+    NULL  // End of list
 };
 
-void h0PopCallback(void *ptr)                                                      // Funcion que se ejecuta al cambiar el slider.       
-{
-    uint32_t number = 0;
-    char temp[10] = {0};
-   // dbSerialPrintln("h0PopCallback");                                             // Mostramos por el puerto de deputacion que se activo la funcion hopopcallback.
-    h0.getValue(&number);                                                         // Recuperamos el valor del slider.
-    valorSlider=number; 
-    //dbSerialPrintln(valorSlider);
-     delayPasos=map(valorSlider,0,100,9000,500);                             // Mapeamos para sacar la escala que desamos.  
-    //dbSerialPrintln(delayPasos);
-    utoa(number, temp, 10);                                                       // Lo pasamos a texto.
-    t0.setText(temp);                                                             // Ponemos la etiqueta con el valor del slider.
-                           
+void b0PopCallback(void *ptr) {
+    moving = true;  // Start or continue the motor
 }
 
-void bt0Funcion(void *ptr)  {
-     bt0.getValue(&botonMotorON);
-    if(botonMotorON) puestaMarchaMotor = true; else puestaMarchaMotor = false;
-     }
+void b1PopCallback(void *ptr) {
+    direction = !direction;  // Toggle direction
+    digitalWrite(DIR_PIN, direction ? HIGH : LOW);  // Apply the direction change
+}
 
-void bt1Funcion(void *ptr)  {
-    bt1.getValue(&botonSentidoGiro);
-    if(botonSentidoGiro)    {
-       sentidoGiro = true;
-       digitalWrite(dirPin, HIGH);                                               // Activamos la direccion del motor ( giro antihorario).  
-    } else  {
-      digitalWrite(dirPin, LOW);                                                // Activamos la direccion del motor ( giro antihorario).
-       sentidoGiro = false;
+void h0PopCallback(void *ptr) {
+    uint32_t speed;
+    h0.getValue(&speed);
+    // Convert speed from range 0-100 to delay time between steps, from slow to fast
+    stepDelay = map(speed, 0, 100, 2000, 50);  // Now mapping speed from 0-100
+}
+
+void setup() {
+
+    pinMode(STEP_PIN, OUTPUT);
+    pinMode(DIR_PIN, OUTPUT);
+    Serial.begin(9600); // Start serial communication with computer for debugging
+    Serial2.begin(9600); // Start serial communication on Serial2 port with Nextion display
+    Serial.println("STARTING UP....");
+
+    nexInit(); // Initialize communication with Nextion display
+
+    // Attach the callback functions
+    b0.attachPop(b0PopCallback, &b0);
+    bt0.attachPop(b1PopCallback, &bt0);
+    h0.attachPop(h0PopCallback, &h0);
+
+  
+}
+
+void loop() {
+    nexLoop(nex_listen_list); // Process Nextion touch events
+
+     if (moving) {
+        unsigned long currentTime = micros();
+        if (currentTime - lastStepTime >= stepDelay) {
+            digitalWrite(STEP_PIN, HIGH);  // Make one step
+            delayMicroseconds(10);  // Minimum high time for most stepper drivers
+            digitalWrite(STEP_PIN, LOW);
+            lastStepTime = currentTime;  // Reset the last step time
+        }
     }
-  }
 
-void setup(void)
-{
-   pinMode(dirPin, OUTPUT);                                                   // definimos dirPin como salida.
-   pinMode(pulsoPin, OUTPUT);                                                 // definimos pulsoPin como salida.
-   digitalWrite(dirPin, LOW);                                                 // Activamos la direccion del motor ( giro antihorario).
-   nexInit();                                                                 // Iniciamos la comunicacion con la nextion.
-   bt0.attachPop(bt0Funcion);                                                 // Registra la funcion que de desencadena al pulsar el boton de texto.
-   bt1.attachPop(bt1Funcion);                                                 // Registra la funcion que de desencadena al pulsar el boton de texto.
-   h0.attachPop(h0PopCallback);                                               // Indicamos la funcion a la que saltara con el evento h0.AttachPop
-   dbSerialPrintln("Arduino funcionando ...");                                // Inprimimos por el puerto de depuracion saliendo del setup.  
 }
-
-void loop(void)
-{
-   nexLoop(nex_listen_list);                                                     // Escuchando eventos provenientes de la pantalla.
-   //delayPasos=3000;
-       
-    
-    if(puestaMarchaMotor) 
-    {
-         digitalWrite(pulsoPin, HIGH);                                         // Ponemos en valor alto la salida del pin del pulsos.
-         delayMicroseconds(delayPasos);                                        // temporizamos el valor resultante del mapeo.
-         digitalWrite(pulsoPin, LOW);                                          // Bajamos el pin de pulsos.
-         delayMicroseconds(delayPasos);                                        // temporizamos el valor resultante del mapeo.
-      }
-    }    
 
 
 
