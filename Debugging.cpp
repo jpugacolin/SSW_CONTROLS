@@ -20,6 +20,7 @@ unsigned long lastStepTime = 0;  // Time tracking for steps
 int stepDelay = 1000;  // Initial step delay in microseconds, adjust as needed
 unsigned long targetSteps = 0;  // Target steps to move for special button action
 unsigned long stepsTaken = 0; 
+
 // Declare the Nextion components
 NexButton b0 = NexButton(1, 1, "b0"); // Page 0, ID 1, Button for forward
 NexButton bt0 = NexButton(1, 2, "bt0"); // Page 0, ID 2, Button for backward
